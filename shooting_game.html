@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>双人射击游戏</title>
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background: #111; color: #eee; }
+    .hud { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: #222; border-bottom: 1px solid #333; }
+    .hud .col { display: flex; gap: 16px; align-items: baseline; }
+    .badge { padding: 4px 8px; border-radius: 6px; background: #333; }
+    .ok { color: #8ef08e; }
+    .warn { color: #f0d48e; }
+    .danger { color: #ff6b6b; }
+    .mid { text-align: center; }
+    #game { display: block; margin: 0 auto; background: #181818; border-left: 1px solid #333; border-right: 1px solid #333; }
+    .footer { padding: 8px 16px; font-size: 14px; color: #bbb; background: #1a1a1a; border-top: 1px solid #333; }
+    .keys { color: #9ecbff; }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="col">
+      <div class="badge">回合: <span id="round">1</span>/4</div>
+      <div class="badge">状态: <span id="status">进行中</span></div>
+    </div>
+    <div class="col">
+      <div class="badge">P1 血量: <span id="p1hp" class="ok">100</span></div>
+      <div class="badge">P1 子弹: <span id="p1bul">3</span></div>
+    </div>
+    <div class="col">
+      <div class="badge">P2 血量: <span id="p2hp" class="ok">100</span></div>
+      <div class="badge">P2 子弹: <span id="p2bul">3</span></div>
+    </div>
+  </div>
+
+  <canvas id="game" width="960" height="480"></canvas>
+
+  <div class="footer">
+    控制：
+    <span class="keys">P1: A/D 左右，W 射击</span>；
+    <span class="keys">P2: ←/→ 左右，↑ 射击</span>
+    （仅左右移动；击中头部秒杀；击中身体扣 40；击中掩体无伤害。双方子弹用尽自动进入下一回合并各自回复 40（最多 100），共 4 回合，若无玩家死亡则平局）
+  </div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const HALF = W / 2;
+
+    const HUD = {
+      roundEl: document.getElementById('round'),
+      statusEl: document.getElementById('status'),
+      p1hpEl: document.getElementById('p1hp'),
+      p2hpEl: document.getElementById('p2hp'),
+      p1bulEl: document.getElementById('p1bul'),
+      p2bulEl: document.getElementById('p2bul'),
+    };
+
+    // Game config
+    const ROUNDS_MAX = 4;
+    const PLAYER = { width: 40, height: 70, headH: 20, speed: 4 };
+    const BULLET = { speed: 8, radius: 4 };
+    const COVER = { count: 2, minW: 60, maxW: 110, minH: 30, maxH: 80 };
+
+    // State
+    let state = {
+      round: 1,
+      over: false,
+      winner: null, // 'P1' | 'P2' | 'DRAW'
+      bullets: [],
+      covers: [],
+      p1: { x: W * 0.25, y: H - PLAYER.height - 10, hp: 100, bullets: 3, left: false, right: false },
+      p2: { x: W * 0.75 - PLAYER.width, y: H - PLAYER.height - 10, hp: 100, bullets: 3, left: false, right: false },
+      lastShotTickP1: 0,
+      lastShotTickP2: 0,
+    };
+
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+    function resetCovers() {
+      state.covers = [];
+      // exactly one cover per side
+      const makeCover = () => {
+        const w = Math.floor(Math.random() * (COVER.maxW - COVER.minW)) + COVER.minW;
+        const h = Math.floor(Math.random() * (COVER.maxH - COVER.minH)) + COVER.minH;
+        return { w, h };
+      };
+      const margin = 20;
+
+      // left side cover
+      {
+        const { w, h } = makeCover();
+        const x = Math.floor(Math.random() * (HALF - w - margin * 2)) + margin;
+        const y = Math.floor(Math.random() * (H * 0.6 - h)) + H * 0.2;
+        state.covers.push({ x, y, w, h });
+      }
+      // right side cover
+      {
+        const { w, h } = makeCover();
+        const x = Math.floor(Math.random() * (HALF - w - margin * 2)) + (HALF + margin);
+        const y = Math.floor(Math.random() * (H * 0.6 - h)) + H * 0.2;
+        state.covers.push({ x, y, w, h });
+      }
+    }
+
+    function drawBackground() {
+      // split
+      ctx.fillStyle = '#202020';
+      ctx.fillRect(0, 0, HALF, H);
+      ctx.fillStyle = '#242424';
+      ctx.fillRect(HALF, 0, HALF, H);
+      // center line
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(HALF, 0);
+      ctx.lineTo(HALF, H);
+      ctx.stroke();
+    }
+
+    function drawPlayer(p, color) {
+      // body (torso)
+      const torsoW = PLAYER.width * 0.5;
+      const torsoH = PLAYER.height - PLAYER.headH;
+      const torsoX = p.x + (PLAYER.width - torsoW) * 0.5;
+      const torsoY = p.y + PLAYER.headH;
+      ctx.fillStyle = color;
+      ctx.fillRect(torsoX, torsoY, torsoW, torsoH);
+
+      // head (circle)
+      ctx.fillStyle = '#ffd166';
+      const headR = PLAYER.headH / 2;
+      const headCX = p.x + PLAYER.width / 2;
+      const headCY = p.y + headR;
+      ctx.beginPath();
+      ctx.arc(headCX, headCY, headR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // arms
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(torsoX, torsoY + torsoH * 0.2);
+      ctx.lineTo(torsoX - 14, torsoY + torsoH * 0.2);
+      ctx.moveTo(torsoX + torsoW, torsoY + torsoH * 0.2);
+      ctx.lineTo(torsoX + torsoW + 14, torsoY + torsoH * 0.2);
+      ctx.stroke();
+
+      // legs
+      ctx.beginPath();
+      ctx.moveTo(torsoX + torsoW * 0.3, torsoY + torsoH);
+      ctx.lineTo(torsoX + torsoW * 0.3 - 10, torsoY + torsoH + 18);
+      ctx.moveTo(torsoX + torsoW * 0.7, torsoY + torsoH);
+      ctx.lineTo(torsoX + torsoW * 0.7 + 10, torsoY + torsoH + 18);
+      ctx.stroke();
+
+      // collision boxes remain as defined in playerRects()
+    }
+
+    function drawCovers() {
+      ctx.fillStyle = '#455a64';
+      state.covers.forEach(c => {
+        ctx.fillRect(c.x, c.y, c.w, c.h);
+      });
+    }
+
+    function drawBullets() {
+      ctx.fillStyle = '#9ecbff';
+      state.bullets.forEach(b => {
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, BULLET.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function aabbContainsPoint(rect, px, py) {
+      return px >= rect.x && px <= rect.x + rect.w && py >= rect.y && py <= rect.y + rect.h;
+    }
+
+    function playerRects(p) {
+      const head = { x: p.x, y: p.y, w: PLAYER.width, h: PLAYER.headH };
+      const body = { x: p.x, y: p.y + PLAYER.headH, w: PLAYER.width, h: PLAYER.height - PLAYER.headH };
+      return { head, body };
+    }
+
+    function updateBullets() {
+      // move and check collisions
+      state.bullets.forEach(b => {
+        b.x += b.vx;
+        // remove if off-screen
+        if (b.x < -20 || b.x > W + 20) b.dead = true;
+
+        // cover collisions (no damage)
+        for (const c of state.covers) {
+          if (aabbContainsPoint({ x: c.x, y: c.y, w: c.w, h: c.h }, b.x, b.y)) {
+            b.dead = true;
+            return; // hit cover, bullet disappears
+          }
+        }
+
+        // player collisions
+        const target = b.owner === 'P1' ? state.p2 : state.p1;
+        const { head, body } = playerRects(target);
+        if (aabbContainsPoint(head, b.x, b.y)) {
+          // headshot: instant defeat
+          target.hp = Math.max(0, target.hp - 100);
+          b.dead = true;
+          endGame(b.owner === 'P1' ? 'P1' : 'P2');
+        } else if (aabbContainsPoint(body, b.x, b.y)) {
+          target.hp = Math.max(0, target.hp - 40);
+          b.dead = true;
+          if (target.hp <= 0) {
+            endGame(b.owner === 'P1' ? 'P1' : 'P2');
+          }
+        }
+      });
+      // cleanup
+      state.bullets = state.bullets.filter(b => !b.dead);
+    }
+
+    function endGame(winner) {
+      state.over = true;
+      state.winner = winner;
+      HUD.statusEl.textContent = winner === 'DRAW' ? '平局' : (winner + ' 获胜');
+      HUD.statusEl.className = winner === 'DRAW' ? 'danger' : 'ok';
+    }
+
+    function maybeNextRound() {
+      if (state.over) return;
+      const p1NoBul = state.p1.bullets === 0;
+      const p2NoBul = state.p2.bullets === 0;
+      const noActiveBullets = state.bullets.length === 0;
+      if (p1NoBul && p2NoBul && noActiveBullets) {
+        if (state.round >= ROUNDS_MAX) {
+          // no one died till now
+          endGame('DRAW');
+        } else {
+          state.round += 1;
+          state.p1.bullets = 3;
+          state.p2.bullets = 3;
+          state.p1.hp = Math.min(100, state.p1.hp + 40);
+          state.p2.hp = Math.min(100, state.p2.hp + 40);
+          resetCovers();
+          updateHUD();
+        }
+      }
+    }
+
+    function updateHUD() {
+      HUD.roundEl.textContent = state.round;
+      HUD.p1hpEl.textContent = state.p1.hp;
+      HUD.p2hpEl.textContent = state.p2.hp;
+      HUD.p1bulEl.textContent = state.p1.bullets;
+      HUD.p2bulEl.textContent = state.p2.bullets;
+      HUD.p1hpEl.className = state.p1.hp > 60 ? 'ok' : (state.p1.hp > 30 ? 'warn' : 'danger');
+      HUD.p2hpEl.className = state.p2.hp > 60 ? 'ok' : (state.p2.hp > 30 ? 'warn' : 'danger');
+      HUD.statusEl.textContent = state.over ? (state.winner === 'DRAW' ? '平局' : state.winner + ' 获胜') : '进行中';
+    }
+
+    function shoot(owner) {
+      if (state.over) return;
+      const now = performance.now();
+      if (owner === 'P1') {
+        if (state.p1.bullets <= 0) return;
+        if (now - state.lastShotTickP1 < 250) return; // simple fire rate limit
+        const bx = state.p1.x + PLAYER.width;
+        const by = state.p1.y + PLAYER.headH + (PLAYER.height - PLAYER.headH) * 0.5;
+        state.bullets.push({ x: bx, y: by, vx: BULLET.speed, owner: 'P1' });
+        state.p1.bullets -= 1;
+        state.lastShotTickP1 = now;
+      } else {
+        if (state.p2.bullets <= 0) return;
+        if (now - state.lastShotTickP2 < 250) return;
+        const bx = state.p2.x;
+        const by = state.p2.y + PLAYER.headH + (PLAYER.height - PLAYER.headH) * 0.5;
+        state.bullets.push({ x: bx, y: by, vx: -BULLET.speed, owner: 'P2' });
+        state.p2.bullets -= 1;
+        state.lastShotTickP2 = now;
+      }
+      updateHUD();
+    }
+
+    function updatePlayers() {
+      // P1 movement within left half
+      if (state.p1.left) state.p1.x -= PLAYER.speed;
+      if (state.p1.right) state.p1.x += PLAYER.speed;
+      state.p1.x = clamp(state.p1.x, 10, HALF - PLAYER.width - 10);
+      // P2 movement within right half
+      if (state.p2.left) state.p2.x -= PLAYER.speed;
+      if (state.p2.right) state.p2.x += PLAYER.speed;
+      state.p2.x = clamp(state.p2.x, HALF + 10, W - PLAYER.width - 10);
+    }
+
+    function loop() {
+      ctx.clearRect(0, 0, W, H);
+      drawBackground();
+      drawCovers();
+      updatePlayers();
+      updateBullets();
+      drawPlayer(state.p1, '#4caf50');
+      drawPlayer(state.p2, '#f44336');
+      drawBullets();
+      maybeNextRound();
+      if (!state.over) requestAnimationFrame(loop);
+      else {
+        // show overlay text
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 28px system-ui';
+        ctx.fillText(state.winner === 'DRAW' ? '平局' : (state.winner + ' 获胜'), W / 2, H / 2);
+        ctx.font = '16px system-ui';
+        ctx.fillText('刷新页面可重新开始', W / 2, H / 2 + 32);
+      }
+    }
+
+    // Input
+    window.addEventListener('keydown', (e) => {
+      switch (e.key) {
+        // P1
+        case 'a': case 'A': state.p1.left = true; break;
+        case 'd': case 'D': state.p1.right = true; break;
+        case 'w': case 'W': shoot('P1'); break;
+        // P2
+        case 'ArrowLeft': state.p2.left = true; break;
+        case 'ArrowRight': state.p2.right = true; break;
+        case 'ArrowUp': shoot('P2'); break;
+      }
+    });
+    window.addEventListener('keyup', (e) => {
+      switch (e.key) {
+        case 'a': case 'A': state.p1.left = false; break;
+        case 'd': case 'D': state.p1.right = false; break;
+        case 'ArrowLeft': state.p2.left = false; break;
+        case 'ArrowRight': state.p2.right = false; break;
+      }
+    });
+
+    // Init
+    resetCovers();
+    updateHUD();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
