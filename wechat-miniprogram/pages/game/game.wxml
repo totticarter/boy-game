@@ -1,0 +1,97 @@
+<view class="game-container">
+  <view class="info-panel">
+    <view class="player-info">
+      <text class="info-label">玩家1</text>
+      <text class="info-value">分数: {{score}}</text>
+      <text class="info-value">长度: {{length}}</text>
+    </view>
+
+    <view class="timer">
+      <text class="timer-icon">⏱️</text>
+      <text class="timer-value" style="color: {{timeLeft <= 10 ? '#ff6b6b' : '#667eea'}}">{{timerText}}</text>
+    </view>
+
+    <view class="player-info player2" wx:if="{{gameMode === 'double'}}">
+      <text class="info-label">玩家2</text>
+      <text class="info-value">分数: {{score2}}</text>
+      <text class="info-value">长度: {{length2}}</text>
+    </view>
+  </view>
+
+  <canvas 
+    type="2d"
+    id="gameCanvas"
+    class="game-canvas"
+    disable-scroll="{{true}}"
+  ></canvas>
+
+  <view class="controls">
+    <text class="control-text">{{controlText}}</text>
+    <text class="control-hint">🟢 小虫子: +1节 | 🔴 大虫子: +2节 | 🟣 紫色果实: +3节</text>
+  </view>
+
+  <view class="button-panel">
+    <button class="game-button" bindtap="startGame" disabled="{{gameStarted}}">
+      {{gameStarted ? '▶ 已开始' : '▶ 开始'}}
+    </button>
+    <button class="game-button pause" bindtap="togglePause" disabled="{{!gameStarted}}">
+      {{gamePaused ? '▶ 继续' : '⏸ 暂停'}}
+    </button>
+    <button class="game-button restart" bindtap="restartGame">
+      🔄 重启
+    </button>
+  </view>
+
+  <!-- 游戏结束弹窗 -->
+  <view class="game-over-mask" wx:if="{{showGameOver}}" catchtap="hideGameOver">
+    <view class="game-over" catchtap="stopPropagation">
+      <text class="game-over-title">游戏结束!</text>
+      <text class="winner-text" style="color: {{winnerColor}}">{{winnerText}}</text>
+      <text class="final-score">{{finalScoreText}}</text>
+      <text class="final-length">{{finalLengthText}}</text>
+      <button class="restart-button" bindtap="restartGame">重新开始</button>
+      <button class="back-button" bindtap="backToHome">返回首页</button>
+    </view>
+  </view>
+
+  <!-- 双人模式控制器 -->
+  <view class="joystick-container" wx:if="{{gameMode === 'double'}}">
+    <view class="joystick left">
+      <text class="joystick-label">玩家1</text>
+      <view class="joystick-buttons">
+        <button class="joy-btn" bindtap="player1Up">↑</button>
+        <view class="joy-row">
+          <button class="joy-btn" bindtap="player1Left">←</button>
+          <button class="joy-btn" bindtap="player1Down">↓</button>
+          <button class="joy-btn" bindtap="player1Right">→</button>
+        </view>
+      </view>
+    </view>
+
+    <view class="joystick right">
+      <text class="joystick-label">玩家2</text>
+      <view class="joystick-buttons">
+        <button class="joy-btn" bindtap="player2Up">W</button>
+        <view class="joy-row">
+          <button class="joy-btn" bindtap="player2Left">A</button>
+          <button class="joy-btn" bindtap="player2Down">S</button>
+          <button class="joy-btn" bindtap="player2Right">D</button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 单人模式控制器 -->
+  <view class="joystick-container single" wx:else>
+    <view class="joystick center">
+      <view class="joystick-buttons">
+        <button class="joy-btn" bindtap="player1Up">↑</button>
+        <view class="joy-row">
+          <button class="joy-btn" bindtap="player1Left">←</button>
+          <button class="joy-btn" bindtap="player1Down">↓</button>
+          <button class="joy-btn" bindtap="player1Right">→</button>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

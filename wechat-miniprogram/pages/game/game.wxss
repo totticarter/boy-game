@@ -1,0 +1,275 @@
+.game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.info-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  max-width: 700rpx;
+  background: white;
+  border-radius: 15rpx;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 5rpx 15rpx rgba(0, 0, 0, 0.2);
+}
+
+.player-info {
+  display: flex;
+  flex-direction: column;
+  gap: 5rpx;
+  flex: 1;
+}
+
+.player2 {
+  align-items: flex-end;
+  color: #FF5722;
+}
+
+.info-label {
+  font-size: 24rpx;
+  font-weight: bold;
+  color: #667eea;
+}
+
+.player2 .info-label {
+  color: #FF5722;
+}
+
+.info-value {
+  font-size: 22rpx;
+  color: #666;
+}
+
+.timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5rpx;
+}
+
+.timer-icon {
+  font-size: 32rpx;
+}
+
+.timer-value {
+  font-size: 32rpx;
+  font-weight: bold;
+}
+
+.game-canvas {
+  width: 700rpx;
+  height: 700rpx;
+  background: #f0f0f0;
+  border: 6rpx solid #667eea;
+  border-radius: 15rpx;
+  margin-bottom: 20rpx;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+  padding: 15rpx;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 10rpx;
+  margin-bottom: 20rpx;
+  width: 100%;
+  max-width: 700rpx;
+}
+
+.control-text {
+  font-size: 24rpx;
+  color: #333;
+  text-align: center;
+}
+
+.control-hint {
+  font-size: 22rpx;
+  color: #666;
+  text-align: center;
+}
+
+.button-panel {
+  display: flex;
+  gap: 15rpx;
+  margin-bottom: 20rpx;
+}
+
+.game-button {
+  padding: 15rpx 35rpx;
+  font-size: 28rpx;
+  font-weight: bold;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 10rpx;
+}
+
+.game-button:active {
+  opacity: 0.8;
+}
+
+.game-button[disabled] {
+  opacity: 0.5;
+}
+
+.game-button.pause {
+  background: #FFC107;
+}
+
+.game-button.restart {
+  background: #FF5722;
+}
+
+.game-over-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.game-over {
+  background: white;
+  border-radius: 20rpx;
+  padding: 50rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20rpx;
+  min-width: 500rpx;
+}
+
+.game-over-title {
+  font-size: 48rpx;
+  font-weight: bold;
+  color: #ff6b6b;
+}
+
+.winner-text {
+  font-size: 36rpx;
+  font-weight: bold;
+}
+
+.final-score,
+.final-length {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.restart-button,
+.back-button {
+  width: 100%;
+  padding: 20rpx;
+  font-size: 32rpx;
+  font-weight: bold;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 10rpx;
+  margin-top: 10rpx;
+}
+
+.back-button {
+  background: #999;
+}
+
+.joystick-container {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 700rpx;
+  gap: 10rpx;
+  margin-top: 20rpx;
+  padding: 0 10rpx;
+  box-sizing: border-box;
+}
+
+.joystick-container.single {
+  justify-content: center;
+}
+
+.joystick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 15rpx;
+  padding: 15rpx 10rpx;
+  flex: 1;
+}
+
+.joystick.center {
+  flex: 0 0 auto;
+}
+
+.joystick-label {
+  font-size: 22rpx;
+  font-weight: bold;
+  color: #667eea;
+  margin-bottom: 5rpx;
+}
+
+.joystick.right .joystick-label {
+  color: #FF5722;
+}
+
+.joystick-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22rpx;
+}
+
+.joy-row {
+  display: flex;
+  gap: 22rpx;
+}
+
+.joy-btn {
+  width: 105rpx;
+  height: 105rpx;
+  min-width: 105rpx;
+  min-height: 105rpx;
+  max-width: 105rpx;
+  max-height: 105rpx;
+  padding: 0;
+  margin: 0;
+  font-size: 48rpx;
+  font-weight: bold;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.joy-btn::after {
+  border: none;
+}
+
+.joy-btn:active {
+  opacity: 0.7;
+}
+
+.joystick.right .joy-btn {
+  background: #FF5722;
+}

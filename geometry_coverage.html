@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>几何图形覆盖面积动态展示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+            min-width: 600px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+
+        .canvas-section {
+            margin-bottom: 30px;
+        }
+
+        .canvas-title {
+            font-size: 16px;
+            color: #555;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        canvas {
+            display: block;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #fafafa;
+            width: 100%;
+        }
+
+        .control-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        .slider-container {
+            margin-bottom: 20px;
+        }
+
+        .slider-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4A90E2;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4A90E2;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .info-item {
+            padding: 12px;
+            background: white;
+            border-radius: 4px;
+            border-left: 3px solid #4A90E2;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-size: 18px;
+            color: #333;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+        }
+
+        .chart-section {
+            margin-top: 30px;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+
+            h1 {
+                font-size: 20px;
+            }
+
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>几何图形覆盖面积动态展示</h1>
+        
+        <!-- 图形演示区 -->
+        <div class="canvas-section">
+            <div class="canvas-title">图形演示区</div>
+            <canvas id="shapeCanvas"></canvas>
+        </div>
+
+        <!-- 控制区 -->
+        <div class="control-section">
+            <div class="slider-container">
+                <label class="slider-label">时间控制: <span id="sliderTimeDisplay" style="font-weight: bold; color: #4A90E2;">0 秒</span></label>
+                <input type="range" id="timeSlider" min="0" max="1000" value="0" step="1">
+            </div>
+            
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">当前时间</div>
+                    <div class="info-value" id="timeValue">0.0 秒</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">三角形位置</div>
+                    <div class="info-value" id="positionValue">0.0 厘米</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label" style="font-size: 18px; font-weight: bold;">覆盖面积</div>
+                    <div class="info-value" id="areaValue" style="font-size: 24px;">0.00 平方厘米</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 图表展示区 -->
+        <div class="chart-section">
+            <div class="canvas-title">覆盖面积-时间曲线图</div>
+            <canvas id="chartCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // 配置参数
+        const CONFIG = {
+            // 图形参数(单位:厘米) - 缩小1/2
+            parallelLineDistance: 5,     // 平行线间距(原10cm缩小为5cm)
+            rectangleWidth: 4,            // 长方形宽度(原8cm缩小为4cm)
+            rectangleHeight: 3,           // 长方形高度(原6cm缩小为3cm)
+            triangleBase: 6,              // 三角形水平直角边(原12cm缩小为6cm)
+            triangleHeight: 3,            // 三角形竖直直角边(与长方形高度相同,原6cm缩小为3cm)
+            initialGap: 1,                // 初始间距(原2cm缩小为1cm)
+            
+            // 运动参数
+            speed: 2,                     // 移动速度(厘米/秒)
+            
+            // 渲染参数
+            pixelsPerCm: 30,              // 1厘米对应的像素数
+            
+            // 颜色配置
+            colors: {
+                parallelLine: '#CCCCCC',
+                rectangleFill: 'rgba(74, 144, 226, 0.8)',
+                rectangleStroke: '#2E5C8A',
+                triangleFill: 'rgba(231, 76, 60, 0.8)',
+                triangleStroke: '#C0392B',
+                overlapFill: 'rgba(155, 89, 182, 0.6)',
+                curveLine: '#27AE60',
+                currentPoint: '#F39C12'
+            }
+        };
+
+        // 计算总移动距离和时间
+        const totalDistance = CONFIG.initialGap + CONFIG.rectangleWidth + CONFIG.triangleBase;
+        const totalTime = totalDistance / CONFIG.speed;
+
+        // Canvas初始化
+        const shapeCanvas = document.getElementById('shapeCanvas');
+        const chartCanvas = document.getElementById('chartCanvas');
+        const shapeCtx = shapeCanvas.getContext('2d');
+        const chartCtx = chartCanvas.getContext('2d');
+
+        // 设置Canvas尺寸
+        const canvasWidth = 900;
+        const shapeCanvasHeight = 250; // 缩小高度(原400px)
+        const chartCanvasHeight = 300;
+
+        shapeCanvas.width = canvasWidth;
+        shapeCanvas.height = shapeCanvasHeight;
+        chartCanvas.width = canvasWidth;
+        chartCanvas.height = chartCanvasHeight;
+
+        // 时间滑块
+        const timeSlider = document.getElementById('timeSlider');
+        timeSlider.max = Math.ceil(totalTime); // 粒度1秒
+
+        // 长方形固定位置(画布坐标) - 调整为上下贴紧平行线
+        const rectStartX = 300; // 像素
+        const rectStartY = 50; // 像素,为平行线上边缘(调整位置)
+
+        // 预计算覆盖面积数据
+        const areaData = [];
+        const timeStep = 0.05; // 计算步长
+        for (let t = 0; t <= totalTime; t += timeStep) {
+            const area = calculateOverlapArea(t);
+            areaData.push({ time: t, area: area });
+        }
+
+        // 计算三角形位置
+        function getTrianglePosition(time) {
+            const distanceMoved = CONFIG.speed * time;
+            const triangleX = rectStartX - CONFIG.initialGap * CONFIG.pixelsPerCm - CONFIG.triangleBase * CONFIG.pixelsPerCm + distanceMoved * CONFIG.pixelsPerCm;
+            return triangleX;
+        }
+
+        // 计算覆盖面积
+        function calculateOverlapArea(time) {
+            const triangleX = getTrianglePosition(time);
+            
+            // 三角形顶点(直角三角形,直角在左下角) - 上下贴紧平行线
+            const triY = rectStartY + (CONFIG.parallelLineDistance - CONFIG.triangleHeight) * CONFIG.pixelsPerCm;
+            const triX1 = triangleX;
+            const triY1 = triY + CONFIG.triangleHeight * CONFIG.pixelsPerCm;
+            const triX2 = triangleX;
+            const triY2 = triY;
+            const triX3 = triangleX + CONFIG.triangleBase * CONFIG.pixelsPerCm;
+            const triY3 = triY + CONFIG.triangleHeight * CONFIG.pixelsPerCm;
+            
+            // 长方形顶点 - 上下贴紧平行线
+            const rectX1 = rectStartX;
+            const rectX2 = rectStartX + CONFIG.rectangleWidth * CONFIG.pixelsPerCm;
+            const rectY1 = rectStartY + (CONFIG.parallelLineDistance - CONFIG.rectangleHeight) * CONFIG.pixelsPerCm;
+            const rectY2 = rectY1 + CONFIG.rectangleHeight * CONFIG.pixelsPerCm;
+            
+            // 判断是否有重叠
+            if (triX3 <= rectX1 || triX1 >= rectX2) {
+                return 0;
+            }
+            
+            // 计算重叠区域
+            const overlapLeft = Math.max(triX1, rectX1);
+            const overlapRight = Math.min(triX3, rectX2);
+            const overlapBottom = Math.max(triY2, rectY2);
+            const overlapTop = Math.min(triY1, rectY1);
+            
+            if (overlapRight <= overlapLeft || overlapBottom <= overlapTop) {
+                return 0;
+            }
+            
+            // 三角形斜边方程: y = triY1 - (triY1-triY2)/(triX3-triX1) * (x-triX1)
+            const slope = (triY2 - triY1) / (triX3 - triX1);
+            
+            // 计算重叠多边形的面积
+            let area = 0;
+            
+            // 检查矩形的四个角是否在三角形内
+            const corners = [
+                {x: rectX1, y: rectY1},
+                {x: rectX2, y: rectY1},
+                {x: rectX1, y: rectY2},
+                {x: rectX2, y: rectY2}
+            ];
+            
+            // 简化计算:使用梯形/矩形近似
+            const width = overlapRight - overlapLeft;
+            
+            // 计算左右两边的高度
+            const leftY = triY1 + slope * (overlapLeft - triX1);
+            const rightY = triY1 + slope * (overlapRight - triX1);
+            
+            const leftHeight = Math.max(0, Math.min(rectY2, leftY) - rectY1);
+            const rightHeight = Math.max(0, Math.min(rectY2, rightY) - rectY1);
+            
+            // 梯形面积
+            area = ((leftHeight + rightHeight) / 2) * width;
+            
+            // 转换为平方厘米
+            const areaCm2 = area / (CONFIG.pixelsPerCm * CONFIG.pixelsPerCm);
+            
+            return Math.max(0, Math.min(areaCm2, CONFIG.rectangleWidth * CONFIG.rectangleHeight));
+        }
+
+        // 绘制图形演示区
+        function drawShapes(time) {
+            shapeCtx.clearRect(0, 0, canvasWidth, shapeCanvasHeight);
+            
+            const triangleX = getTrianglePosition(time);
+            
+            // 绘制平行线 - 上下贴紧图形，线条加粗、黑色
+            shapeCtx.strokeStyle = '#000000'; // 黑色
+            shapeCtx.setLineDash([]); // 实线
+            shapeCtx.lineWidth = 3; // 加粗
+            
+            // 上平行线(贴着三角形顶部)
+            const topLineY = rectStartY + (CONFIG.parallelLineDistance - CONFIG.triangleHeight) * CONFIG.pixelsPerCm;
+            shapeCtx.beginPath();
+            shapeCtx.moveTo(50, topLineY);
+            shapeCtx.lineTo(canvasWidth - 50, topLineY);
+            shapeCtx.stroke();
+            
+            // 下平行线(贴着三角形底部)
+            const bottomLineY = rectStartY + CONFIG.parallelLineDistance * CONFIG.pixelsPerCm;
+            shapeCtx.beginPath();
+            shapeCtx.moveTo(50, bottomLineY);
+            shapeCtx.lineTo(canvasWidth - 50, bottomLineY);
+            shapeCtx.stroke();
+            
+            // 绘制长方形 - 上下贴紧平行线
+            const rectY = rectStartY + (CONFIG.parallelLineDistance - CONFIG.rectangleHeight) * CONFIG.pixelsPerCm;
+            
+            shapeCtx.fillStyle = CONFIG.colors.rectangleFill;
+            shapeCtx.strokeStyle = CONFIG.colors.rectangleStroke;
+            shapeCtx.lineWidth = 2;
+            shapeCtx.fillRect(rectStartX, rectY, CONFIG.rectangleWidth * CONFIG.pixelsPerCm, CONFIG.rectangleHeight * CONFIG.pixelsPerCm);
+            shapeCtx.strokeRect(rectStartX, rectY, CONFIG.rectangleWidth * CONFIG.pixelsPerCm, CONFIG.rectangleHeight * CONFIG.pixelsPerCm);
+            
+            // 绘制三角形 - 上下贴紧平行线
+            const triY = rectStartY + (CONFIG.parallelLineDistance - CONFIG.triangleHeight) * CONFIG.pixelsPerCm;
+            
+            shapeCtx.fillStyle = CONFIG.colors.triangleFill;
+            shapeCtx.strokeStyle = CONFIG.colors.triangleStroke;
+            
+            shapeCtx.beginPath();
+            shapeCtx.moveTo(triangleX, triY + CONFIG.triangleHeight * CONFIG.pixelsPerCm);
+            shapeCtx.lineTo(triangleX, triY);
+            shapeCtx.lineTo(triangleX + CONFIG.triangleBase * CONFIG.pixelsPerCm, triY + CONFIG.triangleHeight * CONFIG.pixelsPerCm);
+            shapeCtx.closePath();
+            shapeCtx.fill();
+            shapeCtx.stroke();
+            
+            // 不绘制覆盖区域高亮阴影
+            // drawOverlapHighlight(triangleX, rectY);
+        }
+
+        // 绘制覆盖区域高亮
+        function drawOverlapHighlight(triangleX, rectY) {
+            const rectX1 = rectStartX;
+            const rectX2 = rectStartX + CONFIG.rectangleWidth * CONFIG.pixelsPerCm;
+            const rectY1 = rectY;
+            const rectY2 = rectY + CONFIG.rectangleHeight * CONFIG.pixelsPerCm;
+            
+            const triY = rectStartY + (CONFIG.parallelLineDistance - CONFIG.triangleHeight) * CONFIG.pixelsPerCm;
+            const triX1 = triangleX;
+            const triY1 = triY + CONFIG.triangleHeight * CONFIG.pixelsPerCm;
+            const triX2 = triangleX;
+            const triY2 = triY;
+            const triX3 = triangleX + CONFIG.triangleBase * CONFIG.pixelsPerCm;
+            const triY3 = triY + CONFIG.triangleHeight * CONFIG.pixelsPerCm;
+            
+            // 判断重叠
+            if (triX3 <= rectX1 || triX1 >= rectX2) {
+                return;
+            }
+            
+            const overlapLeft = Math.max(triX1, rectX1);
+            const overlapRight = Math.min(triX3, rectX2);
+            
+            const slope = (triY2 - triY1) / (triX3 - triX1);
+            
+            // 绘制重叠区域
+            shapeCtx.fillStyle = CONFIG.colors.overlapFill;
+            shapeCtx.beginPath();
+            
+            const leftY = triY1 + slope * (overlapLeft - triX1);
+            const rightY = triY1 + slope * (overlapRight - triX1);
+            
+            shapeCtx.moveTo(overlapLeft, rectY1);
+            shapeCtx.lineTo(overlapRight, rectY1);
+            shapeCtx.lineTo(overlapRight, Math.min(rectY2, rightY));
+            shapeCtx.lineTo(overlapLeft, Math.min(rectY2, leftY));
+            shapeCtx.closePath();
+            shapeCtx.fill();
+        }
+
+        // 绘制图表
+        function drawChart(currentTime) {
+            chartCtx.clearRect(0, 0, canvasWidth, chartCanvasHeight);
+            
+            const padding = 60;
+            const chartWidth = canvasWidth - 2 * padding;
+            const chartHeight = chartCanvasHeight - 2 * padding;
+            
+            // 找到最大面积
+            const maxArea = Math.max(...areaData.map(d => d.area));
+            
+            // 绘制网格
+            chartCtx.strokeStyle = '#f0f0f0';
+            chartCtx.lineWidth = 1;
+            
+            for (let i = 0; i <= 10; i++) {
+                const x = padding + (chartWidth / 10) * i;
+                chartCtx.beginPath();
+                chartCtx.moveTo(x, padding);
+                chartCtx.lineTo(x, padding + chartHeight);
+                chartCtx.stroke();
+                
+                const y = padding + (chartHeight / 10) * i;
+                chartCtx.beginPath();
+                chartCtx.moveTo(padding, y);
+                chartCtx.lineTo(padding + chartWidth, y);
+                chartCtx.stroke();
+            }
+            
+            // 绘制坐标轴
+            chartCtx.strokeStyle = '#333';
+            chartCtx.lineWidth = 2;
+            
+            chartCtx.beginPath();
+            chartCtx.moveTo(padding, padding);
+            chartCtx.lineTo(padding, padding + chartHeight);
+            chartCtx.lineTo(padding + chartWidth, padding + chartHeight);
+            chartCtx.stroke();
+            
+            // 绘制刻度和标签
+            chartCtx.fillStyle = '#333';
+            chartCtx.font = '12px sans-serif';
+            chartCtx.textAlign = 'center';
+            
+            // X轴刻度(按1秒间隔) - 添加单位
+            const maxTimeSeconds = Math.ceil(totalTime);
+            for (let i = 0; i <= maxTimeSeconds; i++) {
+                const x = padding + (i / totalTime) * chartWidth;
+                chartCtx.fillText(i.toFixed(0) + '秒', x, padding + chartHeight + 20);
+            }
+            
+            // Y轴刻度 - 添加单位
+            chartCtx.textAlign = 'right';
+            const maxAreaRounded = Math.ceil(maxArea);
+            for (let i = 0; i <= 10; i++) {
+                const y = padding + chartHeight - (chartHeight / 10) * i;
+                const area = (maxAreaRounded / 10) * i;
+                chartCtx.fillText(area.toFixed(1) + 'cm²', padding - 10, y + 4);
+            }
+            
+            // 轴标签
+            chartCtx.font = '14px sans-serif';
+            chartCtx.textAlign = 'center';
+            chartCtx.fillText('时间 (秒)', padding + chartWidth / 2, chartCanvasHeight - 10);
+            
+            chartCtx.save();
+            chartCtx.translate(15, padding + chartHeight / 2);
+            chartCtx.rotate(-Math.PI / 2);
+            chartCtx.fillText('覆盖面积 (平方厘米)', 0, 0);
+            chartCtx.restore();
+            
+            // 绘制曲线(只显示当前时刻之前的部分)
+            chartCtx.strokeStyle = CONFIG.colors.curveLine;
+            chartCtx.lineWidth = 2;
+            chartCtx.beginPath();
+            
+            let hasDrawn = false;
+            areaData.forEach((point, index) => {
+                if (point.time > currentTime) {
+                    return; // 不绘制当前时刻之后的曲线
+                }
+                
+                const x = padding + (point.time / totalTime) * chartWidth;
+                const y = padding + chartHeight - (point.area / maxArea) * chartHeight;
+                
+                if (!hasDrawn) {
+                    chartCtx.moveTo(x, y);
+                    hasDrawn = true;
+                } else {
+                    chartCtx.lineTo(x, y);
+                }
+            });
+            
+            chartCtx.stroke();
+            
+            // 绘制曲线上的每个时间点(整秒点)
+            chartCtx.fillStyle = CONFIG.colors.curveLine;
+            for (let t = 0; t <= currentTime && t <= totalTime; t += 1) {
+                const pointData = areaData.find(d => Math.abs(d.time - t) < 0.01) || 
+                                 { time: t, area: calculateOverlapArea(t) };
+                const x = padding + (pointData.time / totalTime) * chartWidth;
+                const y = padding + chartHeight - (pointData.area / maxArea) * chartHeight;
+                
+                chartCtx.beginPath();
+                chartCtx.arc(x, y, 4, 0, Math.PI * 2);
+                chartCtx.fill();
+                
+                // 显示面积值 - 添加单位
+                chartCtx.fillStyle = '#333';
+                chartCtx.font = '10px sans-serif';
+                chartCtx.textAlign = 'center';
+                chartCtx.fillText(pointData.area.toFixed(1) + 'cm²', x, y - 10);
+                chartCtx.fillStyle = CONFIG.colors.curveLine;
+            }
+            
+            // 绘制当前时刻标记点
+            const currentX = padding + (currentTime / totalTime) * chartWidth;
+            const currentArea = calculateOverlapArea(currentTime);
+            const currentY = padding + chartHeight - (currentArea / maxArea) * chartHeight;
+            
+            chartCtx.fillStyle = CONFIG.colors.currentPoint;
+            chartCtx.beginPath();
+            chartCtx.arc(currentX, currentY, 6, 0, Math.PI * 2);
+            chartCtx.fill();
+            
+            // 绘制当前时刻垂直线
+            chartCtx.strokeStyle = CONFIG.colors.currentPoint;
+            chartCtx.setLineDash([3, 3]);
+            chartCtx.beginPath();
+            chartCtx.moveTo(currentX, padding);
+            chartCtx.lineTo(currentX, padding + chartHeight);
+            chartCtx.stroke();
+            chartCtx.setLineDash([]);
+        }
+
+        // 更新显示
+        function updateDisplay(time) {
+            const triangleX = getTrianglePosition(time);
+            const area = calculateOverlapArea(time);
+            const positionCm = (triangleX - (rectStartX - CONFIG.initialGap * CONFIG.pixelsPerCm - CONFIG.triangleBase * CONFIG.pixelsPerCm)) / CONFIG.pixelsPerCm;
+            
+            document.getElementById('timeValue').textContent = time.toFixed(1) + ' 秒';
+            document.getElementById('positionValue').textContent = positionCm.toFixed(1) + ' 厘米';
+            document.getElementById('areaValue').textContent = area.toFixed(2) + ' 平方厘米';
+            
+            drawShapes(time);
+            drawChart(time);
+        }
+
+        // 滑块事件监听
+        timeSlider.addEventListener('input', function() {
+            const time = parseFloat(this.value);
+            // 实时显示滑块时间
+            document.getElementById('sliderTimeDisplay').textContent = time.toFixed(0) + ' 秒';
+            updateDisplay(time);
+        });
+
+        // 初始化显示
+        updateDisplay(0);
+    </script>
+</body>
+</html>

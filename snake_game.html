@@ -134,24 +134,89 @@
         .game-over button:hover {
             background: #5568d3;
         }
+
+        .mode-selection {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            z-index: 1000;
+        }
+
+        .mode-selection h2 {
+            color: #333;
+            margin-top: 0;
+            margin-bottom: 30px;
+        }
+
+        .mode-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .mode-button {
+            padding: 20px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            min-width: 150px;
+        }
+
+        .mode-button:hover {
+            background: #5568d3;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .mode-button:active {
+            transform: translateY(0);
+        }
+
+        .mode-button.two-player {
+            background: #FF5722;
+        }
+
+        .mode-button.two-player:hover {
+            background: #E64A19;
+        }
     </style>
 </head>
 <body>
+    <!-- 模式选择界面 -->
+    <div class="mode-selection" id="modeSelection">
+        <h2>🎮 选择游戏模式</h2>
+        <div class="mode-buttons">
+            <button class="mode-button" onclick="selectMode('single')">👤 单人模式</button>
+            <button class="mode-button two-player" onclick="selectMode('double')">👥 双人模式</button>
+        </div>
+    </div>
+
     <div class="game-container">
         <h1>🐍 贪吃蛇游戏</h1>
-        <div class="info-panel">
+        <div class="info-panel" id="infoPanel">
             <div>玩家1分数: <span class="score" id="score">0</span></div>
             <div>玩家1长度: <span class="score" id="length">3</span></div>
             <div style="color: #667eea; font-weight: bold; font-size: 20px;">⏱️ <span id="timer">2:00</span></div>
-            <div style="color: #FF5722;">玩家2分数: <span class="score" id="score2">0</span></div>
-            <div style="color: #FF5722;">玩家2长度: <span class="score" id="length2">3</span></div>
+            <div style="color: #FF5722;" id="player2Score">玩家2分数: <span class="score" id="score2">0</span></div>
+            <div style="color: #FF5722;" id="player2Length">玩家2长度: <span class="score" id="length2">3</span></div>
         </div>
         <canvas id="gameCanvas" width="600" height="600"></canvas>
-        <div class="controls">
-            玩家1: 使用方向键 ↑ ↓ ← → 控制 | 玩家2: 使用 WASD 控制 | 空格键: 开始/暂停<br>
+        <div class="controls" id="controls">
+            <span id="controlText">使用方向键 ↑ ↓ ← → 控制 | 空格键: 开始/暂停</span><br>
             <span style="color: #4CAF50;">🟢 小虫子: +1节</span> | 
             <span style="color: #FF5722;">🔴 大虫子: +2节</span> | 
-            <span style="color: #ff6b6b;">碰到边缘: -3节</span>
+            <span style="color: #9C27B0;">🟣 紫色果实: +3节</span>
         </div>
         <div class="button-panel">
             <button class="game-button" id="startButton" onclick="startGame()">▶ 开始</button>
@@ -163,8 +228,8 @@
     <div class="game-over" id="gameOver">
         <h2>游戏结束!</h2>
         <p id="winnerText"></p>
-        <p>玩家1分数: <span id="finalScore">0</span> | 玩家2分数: <span id="finalScore2">0</span></p>
-        <p>玩家1长度: <span id="finalLength">0</span> | 玩家2长度: <span id="finalLength2">0</span></p>
+        <p id="finalScoreText">玩家1分数: <span id="finalScore">0</span> | 玩家2分数: <span id="finalScore2">0</span></p>
+        <p id="finalLengthText">玩家1长度: <span id="finalLength">0</span> | 玩家2长度: <span id="finalLength2">0</span></p>
         <button onclick="restartGame()">重新开始</button>
     </div>
 
@@ -181,8 +246,8 @@
         const winnerTextElement = document.getElementById('winnerText');
         const timerElement = document.getElementById('timer');
 
-        const GRID_SIZE = 20;
-        const TILE_COUNT = canvas.width / GRID_SIZE;
+        const GRID_SIZE = 60; // 从20改为60，格子再放大3倍
+        const TILE_COUNT = 10; // 从30改为10，格子变大3倍
 
         // 音效系统
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -284,33 +349,36 @@
         }
 
         let snake = [
-            { x: 10, y: 10 },
-            { x: 9, y: 10 },
-            { x: 8, y: 10 }
+            { x: 3, y: 3 },
+            { x: 2, y: 3 },
+            { x: 1, y: 3 }
         ];
         let direction = { x: 1, y: 0 };
         let nextDirection = { x: 1, y: 0 };
         
         // 第二条蛇
         let snake2 = [
-            { x: 20, y: 20 },
-            { x: 21, y: 20 },
-            { x: 22, y: 20 }
+            { x: 7, y: 7 },
+            { x: 8, y: 7 },
+            { x: 9, y: 7 }
         ];
         let direction2 = { x: -1, y: 0 };
         let nextDirection2 = { x: -1, y: 0 };
         
         let smallFood = { x: 15, y: 15 };
         let bigFood = { x: 20, y: 20 };
+        let purpleFood = null; // 紫色果实
         let score = 0;
         let score2 = 0;
         let gameRunning = false;
         let gamePaused = false;
         let gameStarted = false;
-        let gameSpeed = 150;
+        let gameSpeed = 400; // 从150改为400，速度调慢
         let lastRenderTime = 0;
         let gameTimeLeft = 120; // 2分钟 = 120秒
         let timerInterval = null;
+        let gameMode = null; // 'single' 或 'double'
+        let wall = []; // 移除墙壁
 
         function randomPosition() {
             return {
@@ -325,9 +393,23 @@
                 position = randomPosition();
             } while (
                 snake.some(segment => segment.x === position.x && segment.y === position.y) ||
-                snake2.some(segment => segment.x === position.x && segment.y === position.y)
+                (gameMode === 'double' && snake2.some(segment => segment.x === position.x && segment.y === position.y))
             );
             return position;
+        }
+
+        // 生成紫色果实（只在四个角落）
+        function spawnPurpleFood() {
+            const corners = [
+                { x: 0, y: 0 }, // 左上
+                { x: TILE_COUNT - 1, y: 0 }, // 右上
+                { x: 0, y: TILE_COUNT - 1 }, // 左下
+                { x: TILE_COUNT - 1, y: TILE_COUNT - 1 } // 右下
+            ];
+            
+            // 随机选择一个角落
+            const randomCorner = corners[Math.floor(Math.random() * corners.length)];
+            return randomCorner;
         }
 
         function drawRect(x, y, color, borderColor = null) {
@@ -352,14 +434,14 @@
             ctx.fillStyle = '#f0f0f0';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 画玩家1的蛇
+            // 画蛇1的蛇
             snake.forEach((segment, index) => {
                 if (index === 0) {
                     // 蛇头
                     drawRect(segment.x, segment.y, '#4CAF50', '#2E7D32');
-                    // 在蛇头上显示节数
+                    // 在蛇头上显示节数，字体大小适配格子
                     ctx.fillStyle = 'white';
-                    ctx.font = 'bold 12px Arial';
+                    ctx.font = `bold ${Math.floor(GRID_SIZE * 0.6)}px Arial`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText(snake.length, segment.x * GRID_SIZE + GRID_SIZE / 2, segment.y * GRID_SIZE + GRID_SIZE / 2);
@@ -369,22 +451,24 @@
                 }
             });
 
-            // 画玩家2的蛇
-            snake2.forEach((segment, index) => {
-                if (index === 0) {
-                    // 蛇头
-                    drawRect(segment.x, segment.y, '#FF5722', '#D84315');
-                    // 在蛇头上显示节数
-                    ctx.fillStyle = 'white';
-                    ctx.font = 'bold 12px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(snake2.length, segment.x * GRID_SIZE + GRID_SIZE / 2, segment.y * GRID_SIZE + GRID_SIZE / 2);
-                } else {
-                    // 蛇身
-                    drawRect(segment.x, segment.y, '#FF7043', '#E64A19');
-                }
-            });
+            // 画蛇2的蛇（仅在双人模式下）
+            if (gameMode === 'double') {
+                snake2.forEach((segment, index) => {
+                    if (index === 0) {
+                        // 蛇头
+                        drawRect(segment.x, segment.y, '#FF5722', '#D84315');
+                        // 在蛇头上显示节数，字体大小适配格子
+                        ctx.fillStyle = 'white';
+                        ctx.font = `bold ${Math.floor(GRID_SIZE * 0.6)}px Arial`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(snake2.length, segment.x * GRID_SIZE + GRID_SIZE / 2, segment.y * GRID_SIZE + GRID_SIZE / 2);
+                    } else {
+                        // 蛇身
+                        drawRect(segment.x, segment.y, '#FF7043', '#E64A19');
+                    }
+                });
+            }
 
             // 画小虫子
             drawCircle(smallFood.x, smallFood.y, '#4CAF50');
@@ -396,6 +480,61 @@
             ctx.beginPath();
             ctx.arc(bigFood.x * GRID_SIZE + GRID_SIZE / 2, bigFood.y * GRID_SIZE + GRID_SIZE / 2, GRID_SIZE / 4, 0, Math.PI * 2);
             ctx.fill();
+
+            // 画紫色果实（单人模式）
+            if (gameMode === 'single' && purpleFood) {
+                drawCircle(purpleFood.x, purpleFood.y, '#9C27B0');
+                // 紫色果实内部画个星星效果
+                ctx.fillStyle = '#E1BEE7';
+                ctx.beginPath();
+                ctx.arc(purpleFood.x * GRID_SIZE + GRID_SIZE / 2, purpleFood.y * GRID_SIZE + GRID_SIZE / 2, GRID_SIZE / 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function selectMode(mode) {
+            gameMode = mode;
+            document.getElementById('modeSelection').style.display = 'none';
+            
+            // 根据模式更新UI
+            if (mode === 'single') {
+                // 隐藏玩家2相关信息
+                document.getElementById('player2Score').style.display = 'none';
+                document.getElementById('player2Length').style.display = 'none';
+                document.getElementById('controlText').textContent = '使用方向键 ↑ ↓ ← → 控制 | 空格键: 开始/暂停';
+            } else {
+                // 显示玩家2相关信息
+                document.getElementById('player2Score').style.display = 'block';
+                document.getElementById('player2Length').style.display = 'block';
+                document.getElementById('controlText').textContent = '玩家1: 使用方向键 ↑ ↓ ← → 控制 | 玩家2: 使用 WASD 控制 | 空格键: 开始/暂停';
+            }
+            
+            smallFood = spawnFood();
+            bigFood = spawnFood();
+            
+            // 单人模式生成紫色果实
+            if (mode === 'single') {
+                purpleFood = spawnPurpleFood();
+            } else {
+                purpleFood = null;
+            }
+            
+            score = 0;
+            score2 = 0;
+            gameRunning = false;
+            gamePaused = false;
+            gameStarted = false;
+            gameTimeLeft = 120;
+            if (timerInterval) clearInterval(timerInterval);
+            updateTimer();
+            gameOverDiv.style.display = 'none';
+            winnerTextElement.textContent = '';
+            updateScore();
+            updateScore2();
+            updateLengthDisplay();
+            updateLength2Display();
+            updateButtonStates();
+            draw();
         }
 
         function updateSnake(snakeArray, dir, nextDir, isPlayer2 = false) {
@@ -418,13 +557,21 @@
                 }
             }
 
-            // 检查是否碰到自己或对方
+            // 检查是否碰到自己或对方（撞到自己尾巴游戏结束）
             const hitSelf = snakeArray.some(segment => segment.x === head.x && segment.y === head.y);
-            const hitOther = isPlayer2 ? 
-                snake.some(segment => segment.x === head.x && segment.y === head.y) :
-                snake2.some(segment => segment.x === head.x && segment.y === head.y);
+            if (hitSelf) {
+                // 游戏结束
+                endGameByCollision(isPlayer2 ? 'player2' : 'player1');
+                return direction;
+            }
             
-            if (hitSelf || hitOther) {
+            const hitOther = gameMode === 'double' ? 
+                (isPlayer2 ? 
+                    snake.some(segment => segment.x === head.x && segment.y === head.y) :
+                    snake2.some(segment => segment.x === head.x && segment.y === head.y)) :
+                false;
+            
+            if (hitOther) {
                 needsRedirect = true;
             }
 
@@ -452,10 +599,12 @@
                         return false;
                     }
                     
-                    // 检查是否碰到对方
-                    const otherSnake = isPlayer2 ? snake : snake2;
-                    if (otherSnake.some(seg => seg.x === newX && seg.y === newY)) {
-                        return false;
+                    // 检查是否碰到对方（仅在双人模式下）
+                    if (gameMode === 'double') {
+                        const otherSnake = isPlayer2 ? snake : snake2;
+                        if (otherSnake.some(seg => seg.x === newX && seg.y === newY)) {
+                            return false;
+                        }
                     }
                     
                     return true;
@@ -504,6 +653,18 @@
                 snakeArray.push({ ...snakeArray[snakeArray.length - 1] });
                 bigFood = spawnFood();
             }
+            // 检查是否吃到紫色果实（单人模式）
+            else if (gameMode === 'single' && purpleFood && 
+                     head.x === purpleFood.x && head.y === purpleFood.y) {
+                playEatBigSound();
+                score += 30;
+                updateScore();
+                // 增加3节
+                snakeArray.push({ ...snakeArray[snakeArray.length - 1] });
+                snakeArray.push({ ...snakeArray[snakeArray.length - 1] });
+                snakeArray.push({ ...snakeArray[snakeArray.length - 1] });
+                purpleFood = spawnPurpleFood();
+            }
             else {
                 snakeArray.pop();
             }
@@ -512,6 +673,16 @@
                 updateLength2Display();
             } else {
                 updateLengthDisplay();
+            }
+            
+            // 检查是否达到胜利条件（单人模式，长度达到总格子数的一半）
+            if (gameMode === 'single' && !isPlayer2) {
+                const totalTiles = TILE_COUNT * TILE_COUNT;
+                const winLength = Math.floor(totalTiles / 2);
+                if (snakeArray.length >= winLength) {
+                    endGameByVictory();
+                    return direction;
+                }
             }
             
             return direction;
@@ -537,7 +708,9 @@
             if (!gameRunning || gamePaused) return;
             
             direction = updateSnake(snake, direction, nextDirection, false);
-            direction2 = updateSnake(snake2, direction2, nextDirection2, true);
+            if (gameMode === 'double') {
+                direction2 = updateSnake(snake2, direction2, nextDirection2, true);
+            }
         }
 
         function endGame() {
@@ -557,30 +730,90 @@
             
             // 判断胜负
             let winnerText = '';
-            if (score > score2) {
-                winnerText = '🎉 玩家1获胜! 🎉';
-                playWinSound();
-            } else if (score2 > score) {
-                winnerText = '🎉 玩家2获胜! 🎉';
-                playWinSound();
+            if (gameMode === 'single') {
+                const totalTiles = TILE_COUNT * TILE_COUNT;
+                const winLength = Math.floor(totalTiles / 2);
+                
+                if (snake.length >= winLength) {
+                    winnerText = '🎉 胜利! 🎉';
+                    playWinSound();
+                } else {
+                    winnerText = '⏰ 时间到! 再接再厉!';
+                }
+                
+                document.getElementById('finalScoreText').innerHTML = '最终分数: <span id="finalScore">' + score + '</span>';
+                document.getElementById('finalLengthText').innerHTML = '最终长度: <span id="finalLength">' + snake.length + '</span> / ' + winLength + ' (胜利条件)';
             } else {
-                winnerText = '🤝 平局! 🤝';
+                if (score > score2) {
+                    winnerText = '🎉 玩家1获胜! 🎉';
+                    playWinSound();
+                } else if (score2 > score) {
+                    winnerText = '🎉 玩家2获胜! 🎉';
+                    playWinSound();
+                } else {
+                    winnerText = '🤝 平局! 🤝';
+                }
+                document.getElementById('finalScoreText').innerHTML = '玩家1分数: <span id="finalScore">' + score + '</span> | 玩家2分数: <span id="finalScore2">' + score2 + '</span>';
+                document.getElementById('finalLengthText').innerHTML = '玩家1长度: <span id="finalLength">' + snake.length + '</span> | 玩家2长度: <span id="finalLength2">' + snake2.length + '</span>';
             }
             
             winnerTextElement.textContent = winnerText;
             winnerTextElement.style.fontSize = '24px';
             winnerTextElement.style.fontWeight = 'bold';
-            winnerTextElement.style.color = score > score2 ? '#4CAF50' : (score2 > score ? '#FF5722' : '#FFC107');
+            winnerTextElement.style.color = gameMode === 'single' ? (snake.length >= Math.floor(TILE_COUNT * TILE_COUNT / 2) ? '#4CAF50' : '#FFC107') : (score > score2 ? '#4CAF50' : (score2 > score ? '#FF5722' : '#FFC107'));
             
-            finalScoreElement.textContent = score;
-            finalScore2Element.textContent = score2;
-            finalLengthElement.textContent = snake.length;
-            finalLength2Element.textContent = snake2.length;
+            gameOverDiv.style.display = 'block';
+        }
+
+        // 碰撞自己尾巴游戏结束
+        function endGameByCollision(player) {
+            playHitWallSound();
+            gameRunning = false;
+            stopTimer();
+            
+            let winnerText = '💥 撞到自己尾巴！游戏结束!';
+            
+            if (gameMode === 'single') {
+                const totalTiles = TILE_COUNT * TILE_COUNT;
+                const winLength = Math.floor(totalTiles / 2);
+                document.getElementById('finalScoreText').innerHTML = '最终分数: <span id="finalScore">' + score + '</span>';
+                document.getElementById('finalLengthText').innerHTML = '最终长度: <span id="finalLength">' + snake.length + '</span> / ' + winLength + ' (胜利条件)';
+            } else {
+                winnerText = player === 'player1' ? '💥 玩家1撞到自己!' : '💥 玩家2撞到自己!';
+                document.getElementById('finalScoreText').innerHTML = '玩家1分数: <span id="finalScore">' + score + '</span> | 玩家2分数: <span id="finalScore2">' + score2 + '</span>';
+                document.getElementById('finalLengthText').innerHTML = '玩家1长度: <span id="finalLength">' + snake.length + '</span> | 玩家2长度: <span id="finalLength2">' + snake2.length + '</span>';
+            }
+            
+            winnerTextElement.textContent = winnerText;
+            winnerTextElement.style.fontSize = '24px';
+            winnerTextElement.style.fontWeight = 'bold';
+            winnerTextElement.style.color = '#ff6b6b';
+            
+            gameOverDiv.style.display = 'block';
+        }
+
+        // 达到胜利条件
+        function endGameByVictory() {
+            playWinSound();
+            gameRunning = false;
+            stopTimer();
+            
+            const totalTiles = TILE_COUNT * TILE_COUNT;
+            const winLength = Math.floor(totalTiles / 2);
+            
+            winnerTextElement.textContent = '🏆 大胜利! 🏆';
+            winnerTextElement.style.fontSize = '24px';
+            winnerTextElement.style.fontWeight = 'bold';
+            winnerTextElement.style.color = '#FFD700';
+            
+            document.getElementById('finalScoreText').innerHTML = '最终分数: <span id="finalScore">' + score + '</span>';
+            document.getElementById('finalLengthText').innerHTML = '最终长度: <span id="finalLength">' + snake.length + '</span> / ' + winLength + ' (已达成!)';
+            
             gameOverDiv.style.display = 'block';
         }
 
         function startGame() {
-            if (gameStarted && gameRunning) return;
+            if (!gameMode || (gameStarted && gameRunning)) return;
             
             if (!gameStarted) {
                 playStartSound();
@@ -628,24 +861,40 @@
         }
 
         function restartGame() {
+            // 如果没有选择模式，显示模式选择界面
+            if (!gameMode) {
+                document.getElementById('modeSelection').style.display = 'block';
+                return;
+            }
+            
             snake = [
-                { x: 10, y: 10 },
-                { x: 9, y: 10 },
-                { x: 8, y: 10 }
+                { x: 3, y: 3 },
+                { x: 2, y: 3 },
+                { x: 1, y: 3 }
             ];
             direction = { x: 1, y: 0 };
             nextDirection = { x: 1, y: 0 };
             
-            snake2 = [
-                { x: 20, y: 20 },
-                { x: 21, y: 20 },
-                { x: 22, y: 20 }
-            ];
-            direction2 = { x: -1, y: 0 };
-            nextDirection2 = { x: -1, y: 0 };
+            if (gameMode === 'double') {
+                snake2 = [
+                    { x: 7, y: 7 },
+                    { x: 8, y: 7 },
+                    { x: 9, y: 7 }
+                ];
+                direction2 = { x: -1, y: 0 };
+                nextDirection2 = { x: -1, y: 0 };
+            }
             
             smallFood = spawnFood();
             bigFood = spawnFood();
+            
+            // 单人模式生成紫色果实
+            if (gameMode === 'single') {
+                purpleFood = spawnPurpleFood();
+            } else {
+                purpleFood = null;
+            }
+            
             score = 0;
             score2 = 0;
             gameRunning = false;

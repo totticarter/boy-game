@@ -1,0 +1,34 @@
+<view class="container">
+  <view class="header">
+    <text class="title">🐍 贪吃蛇游戏</text>
+    <text class="subtitle">选择游戏模式开始游戏</text>
+  </view>
+
+  <view class="mode-selection">
+    <view class="mode-card" bindtap="selectSingleMode">
+      <text class="mode-icon">🧑</text>
+      <text class="mode-title">单人模式</text>
+      <text class="mode-desc">一条蛇，挑战自我</text>
+    </view>
+
+    <view class="mode-card double" bindtap="selectDoubleMode">
+      <text class="mode-icon">👥</text>
+      <text class="mode-title">双人模式</text>
+      <text class="mode-desc">两条蛇，双人对战</text>
+    </view>
+  </view>
+
+  <view class="rules">
+    <text class="rules-title">游戏规则</text>
+    <text class="rules-item">🟢 小虫子: +1节，+10分</text>
+    <text class="rules-item">🔴 大虫子: +2节，+20分</text>
+    <text class="rules-item">🟣 紫色果实: +3节，+30分（单人模式，出现在角落）</text>
+    <text class="rules-item">💥 撞到自己尾巴: 游戏结束</text>
+    <text class="rules-item">🏆 胜利条件: 长度达到 50节（总格子数的一半）</text>
+    <text class="rules-item">⏱️ 游戏时长: 2分钟</text>
+  </view>
+
+  <view class="high-score" wx:if="{{highScore > 0}}">
+    <text>🏆 最高分: {{highScore}}</text>
+  </view>
+</view>
