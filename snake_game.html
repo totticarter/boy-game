@@ -190,6 +190,64 @@
         .mode-button.two-player:hover {
             background: #E64A19;
         }
+
+        .speed-control {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .speed-label {
+            font-size: 14px;
+            color: #333;
+            font-weight: bold;
+        }
+
+        .speed-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .speed-btn {
+            padding: 6px 16px;
+            font-size: 14px;
+            background: #f0f0f0;
+            color: #666;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            min-width: 50px;
+            transition: all 0.3s;
+        }
+
+        .speed-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+            font-weight: bold;
+        }
+
+        .speed-btn:hover:not(:disabled) {
+            opacity: 0.8;
+            transform: translateY(-1px);
+        }
+
+        .speed-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .speed-hint {
+            font-size: 12px;
+            color: #999;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -217,6 +275,19 @@
             <span style="color: #4CAF50;">🟢 小虫子: +1节</span> | 
             <span style="color: #FF5722;">🔴 大虫子: +2节</span> | 
             <span style="color: #9C27B0;">🟣 紫色果实: +3节</span>
+            
+            <!-- 速度调节控制 -->
+            <div class="speed-control">
+                <span class="speed-label">游戏速度:</span>
+                <div class="speed-buttons">
+                    <button class="speed-btn" data-level="1" onclick="changeSpeed(1)">1档</button>
+                    <button class="speed-btn" data-level="2" onclick="changeSpeed(2)">2档</button>
+                    <button class="speed-btn active" data-level="3" onclick="changeSpeed(3)">3档</button>
+                    <button class="speed-btn" data-level="4" onclick="changeSpeed(4)">4档</button>
+                    <button class="speed-btn" data-level="5" onclick="changeSpeed(5)">5档</button>
+                </div>
+                <span class="speed-hint">1档最慢，5档最快（游戏前设置）</span>
+            </div>
         </div>
         <div class="button-panel">
             <button class="game-button" id="startButton" onclick="startGame()">▶ 开始</button>
@@ -373,12 +444,26 @@
         let gameRunning = false;
         let gamePaused = false;
         let gameStarted = false;
-        let gameSpeed = 400; // 从150改为400，速度调慢
+        let baseSpeed = 400; // 基准速度（档位3）
+        let speedLevels = [
+            667, // 档位1：最慢（400 * 1.67）
+            533, // 档位2：较慢（400 * 1.33）
+            400, // 档位3：中速（基准速度）
+            333, // 档位4：较快（400 / 1.2）
+            267  // 档位5：最快（400 / 1.5）
+        ];
+        let speedLevel = 3; // 默认速度档位为3（中速）
+        let gameSpeed = 400; // 当前游戏速度
         let lastRenderTime = 0;
         let gameTimeLeft = 120; // 2分钟 = 120秒
         let timerInterval = null;
         let gameMode = null; // 'single' 或 'double'
         let wall = []; // 移除墙壁
+        let blinkingSegments = null; // 闪烁的蛇身段
+        let blinkCount = 0; // 闪烁计数
+        let isBlinking = false; // 是否正在闪烁
+        let snakeHeadType = 'rect'; // 蛇1头部类型: 'rect'=方形, 'circle'=圆形(小果实), 'bigCircle'=大圆形(大果实), 'star'=星形(紫色果实)
+        let snakeHeadType2 = 'rect'; // 蛇2头部类型
 
         function randomPosition() {
             return {
@@ -393,7 +478,10 @@
                 position = randomPosition();
             } while (
                 snake.some(segment => segment.x === position.x && segment.y === position.y) ||
-                (gameMode === 'double' && snake2.some(segment => segment.x === position.x && segment.y === position.y))
+                (gameMode === 'double' && snake2.some(segment => segment.x === position.x && segment.y === position.y)) ||
+                (smallFood && position.x === smallFood.x && position.y === smallFood.y) || // 避免与小食物重叠
+                (bigFood && position.x === bigFood.x && position.y === bigFood.y) || // 避免与大食物重叠
+                (purpleFood && position.x === purpleFood.x && position.y === purpleFood.y) // 避免与紫色果实重叠
             );
             return position;
         }
@@ -407,26 +495,120 @@
                 { x: TILE_COUNT - 1, y: TILE_COUNT - 1 } // 右下
             ];
             
-            // 随机选择一个角落
-            const randomCorner = corners[Math.floor(Math.random() * corners.length)];
+            // 过滤掉被蛇占据的角落
+            const availableCorners = corners.filter(corner => {
+                const onSnake1 = snake.some(segment => segment.x === corner.x && segment.y === corner.y);
+                const onSnake2 = gameMode === 'double' && snake2.some(segment => segment.x === corner.x && segment.y === corner.y);
+                return !onSnake1 && !onSnake2;
+            });
+            
+            // 如果没有可用的角落，返回null
+            if (availableCorners.length === 0) {
+                return null;
+            }
+            
+            // 随机选择一个可用的角落
+            const randomCorner = availableCorners[Math.floor(Math.random() * availableCorners.length)];
             return randomCorner;
         }
 
         function drawRect(x, y, color, borderColor = null) {
+            const radius = GRID_SIZE * 0.25; // 圆角半径为格子大小的25%
+            
             ctx.fillStyle = color;
-            ctx.fillRect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE - 2, GRID_SIZE - 2);
+            ctx.beginPath();
+            ctx.roundRect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE - 2, GRID_SIZE - 2, radius);
+            ctx.fill();
+            
             if (borderColor) {
                 ctx.strokeStyle = borderColor;
                 ctx.lineWidth = 2;
-                ctx.strokeRect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE - 2, GRID_SIZE - 2);
+                ctx.stroke();
             }
         }
 
         function drawCircle(x, y, color) {
+            const radius = GRID_SIZE * 0.25; // 使用圆角矩形代替圆形
+            
             ctx.fillStyle = color;
             ctx.beginPath();
-            ctx.arc(x * GRID_SIZE + GRID_SIZE / 2, y * GRID_SIZE + GRID_SIZE / 2, GRID_SIZE / 2 - 2, 0, Math.PI * 2);
+            ctx.roundRect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE - 2, GRID_SIZE - 2, radius);
             ctx.fill();
+        }
+
+        // 绘制蛇身（支持闪烁效果）
+        function drawSnakeSegment(segment, index, snakeArray, isPlayer2 = false, shouldBlink = false) {
+            // 如果需要闪烁且当前是闪烁的"隐藏"状态，则不绘制
+            if (shouldBlink && blinkCount % 2 === 1) {
+                return;
+            }
+            
+            if (index === 0) {
+                // 蛇头 - 根据头部类型绘制不同形状
+                const headColor = isPlayer2 ? '#FF5722' : '#4CAF50';
+                const headBorderColor = isPlayer2 ? '#D84315' : '#2E7D32';
+                const headType = isPlayer2 ? snakeHeadType2 : snakeHeadType;
+                
+                if (headType === 'rect') {
+                    // 方形蛇头（初始状态）
+                    drawRect(segment.x, segment.y, headColor, headBorderColor);
+                } else if (headType === 'circle') {
+                    // 圆形蛇头（吃到小果实）
+                    drawCircle(segment.x, segment.y, headColor);
+                } else if (headType === 'bigCircle') {
+                    // 大圆形蛇头（吃到大果实）
+                    drawCircle(segment.x, segment.y, headColor);
+                    // 内部小圆
+                    ctx.fillStyle = '#FFC107';
+                    ctx.beginPath();
+                    ctx.arc(segment.x * GRID_SIZE + GRID_SIZE / 2, segment.y * GRID_SIZE + GRID_SIZE / 2, GRID_SIZE / 4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (headType === 'star') {
+                    // 星形蛇头（吃到紫色果实）
+                    drawCircle(segment.x, segment.y, '#9C27B0');
+                    // 内部小圆
+                    ctx.fillStyle = '#E1BEE7';
+                    ctx.beginPath();
+                    ctx.arc(segment.x * GRID_SIZE + GRID_SIZE / 2, segment.y * GRID_SIZE + GRID_SIZE / 2, GRID_SIZE / 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                // 在蛇头上显示节数
+                ctx.fillStyle = 'white';
+                ctx.font = `bold ${Math.floor(GRID_SIZE * 0.6)}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(snakeArray.length, segment.x * GRID_SIZE + GRID_SIZE / 2, segment.y * GRID_SIZE + GRID_SIZE / 2);
+            } else {
+                // 蛇身 - 如果即将消失则显示黑色
+                let bodyColor, bodyBorderColor;
+                if (shouldBlink) {
+                    bodyColor = '#333333';
+                    bodyBorderColor = '#000000';
+                } else {
+                    // 蛇身纹理效果
+                    if (isPlayer2) {
+                        bodyColor = '#FF6B35'; // 玩家2橙红色基调
+                        bodyBorderColor = '#D84315';
+                    } else {
+                        bodyColor = '#4CAF50'; // 玩家1绿色基调
+                        bodyBorderColor = '#2E7D32';
+                    }
+                }
+                drawRect(segment.x, segment.y, bodyColor, bodyBorderColor);
+                
+                // 添加蛇皮纹理效果（斑点）
+                if (!shouldBlink) {
+                    ctx.fillStyle = isPlayer2 ? 'rgba(216, 67, 21, 0.3)' : 'rgba(46, 125, 50, 0.4)';
+                    // 绘制两个小斑点
+                    ctx.beginPath();
+                    ctx.arc(segment.x * GRID_SIZE + GRID_SIZE * 0.3, segment.y * GRID_SIZE + GRID_SIZE * 0.35, GRID_SIZE * 0.12, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(segment.x * GRID_SIZE + GRID_SIZE * 0.7, segment.y * GRID_SIZE + GRID_SIZE * 0.65, GRID_SIZE * 0.1, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
         }
 
         function draw() {
@@ -436,37 +618,19 @@
 
             // 画蛇1的蛇
             snake.forEach((segment, index) => {
-                if (index === 0) {
-                    // 蛇头
-                    drawRect(segment.x, segment.y, '#4CAF50', '#2E7D32');
-                    // 在蛇头上显示节数，字体大小适配格子
-                    ctx.fillStyle = 'white';
-                    ctx.font = `bold ${Math.floor(GRID_SIZE * 0.6)}px Arial`;
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(snake.length, segment.x * GRID_SIZE + GRID_SIZE / 2, segment.y * GRID_SIZE + GRID_SIZE / 2);
-                } else {
-                    // 蛇身
-                    drawRect(segment.x, segment.y, '#8BC34A', '#689F38');
-                }
+                const shouldBlink = isBlinking && blinkingSegments && 
+                                   blinkingSegments.player === 1 &&
+                                   index >= blinkingSegments.startIndex;
+                drawSnakeSegment(segment, index, snake, false, shouldBlink);
             });
 
             // 画蛇2的蛇（仅在双人模式下）
             if (gameMode === 'double') {
                 snake2.forEach((segment, index) => {
-                    if (index === 0) {
-                        // 蛇头
-                        drawRect(segment.x, segment.y, '#FF5722', '#D84315');
-                        // 在蛇头上显示节数，字体大小适配格子
-                        ctx.fillStyle = 'white';
-                        ctx.font = `bold ${Math.floor(GRID_SIZE * 0.6)}px Arial`;
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText(snake2.length, segment.x * GRID_SIZE + GRID_SIZE / 2, segment.y * GRID_SIZE + GRID_SIZE / 2);
-                    } else {
-                        // 蛇身
-                        drawRect(segment.x, segment.y, '#FF7043', '#E64A19');
-                    }
+                    const shouldBlink = isBlinking && blinkingSegments && 
+                                       blinkingSegments.player === 2 &&
+                                       index >= blinkingSegments.startIndex;
+                    drawSnakeSegment(segment, index, snake2, true, shouldBlink);
                 });
             }
 
@@ -492,9 +656,37 @@
             }
         }
 
+        // 更新游戏速度
+        function updateGameSpeed() {
+            const level = speedLevel - 1;
+            gameSpeed = speedLevels[level];
+        }
+
+        // 切换速度档位
+        function changeSpeed(level) {
+            if (gameRunning) {
+                alert('游戏进行中无法调速');
+                return;
+            }
+            
+            speedLevel = level;
+            updateGameSpeed();
+            
+            // 更新按钮状态
+            document.querySelectorAll('.speed-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
         function selectMode(mode) {
             gameMode = mode;
             document.getElementById('modeSelection').style.display = 'none';
+            updateGameSpeed(); // 更新速度
+            
+            // 重置蛇头类型
+            snakeHeadType = 'rect';
+            snakeHeadType2 = 'rect';
             
             // 根据模式更新UI
             if (mode === 'single') {
@@ -555,14 +747,6 @@
                         updateLengthDisplay();
                     }
                 }
-            }
-
-            // 检查是否碰到自己或对方（撞到自己尾巴游戏结束）
-            const hitSelf = snakeArray.some(segment => segment.x === head.x && segment.y === head.y);
-            if (hitSelf) {
-                // 游戏结束
-                endGameByCollision(isPlayer2 ? 'player2' : 'player1');
-                return direction;
             }
             
             const hitOther = gameMode === 'double' ? 
@@ -628,15 +812,26 @@
 
             snakeArray.unshift(head);
 
+            // 检查自身碰撞（在添加新头部后检查）
+            const hitSelfIndex = snakeArray.findIndex((segment, index) => 
+                index > 1 && segment.x === head.x && segment.y === head.y
+            );
+            if (hitSelfIndex > 1) {
+                // 触发闪烁效果，但不阻止移动
+                triggerBlinkEffect(snakeArray, hitSelfIndex, isPlayer2);
+            }
+
             // 检查是否吃到小虫子
             if (head.x === smallFood.x && head.y === smallFood.y) {
                 playEatSmallSound();
                 if (isPlayer2) {
                     score2 += 10;
                     updateScore2();
+                    snakeHeadType2 = 'circle'; // 蛇头变成圆形
                 } else {
                     score += 10;
                     updateScore();
+                    snakeHeadType = 'circle'; // 蛇头变成圆形
                 }
                 smallFood = spawnFood();
             }
@@ -646,9 +841,11 @@
                 if (isPlayer2) {
                     score2 += 20;
                     updateScore2();
+                    snakeHeadType2 = 'bigCircle'; // 蛇头变成大圆形
                 } else {
                     score += 20;
                     updateScore();
+                    snakeHeadType = 'bigCircle'; // 蛇头变成大圆形
                 }
                 snakeArray.push({ ...snakeArray[snakeArray.length - 1] });
                 bigFood = spawnFood();
@@ -659,6 +856,7 @@
                 playEatBigSound();
                 score += 30;
                 updateScore();
+                snakeHeadType = 'star'; // 蛇头变成星形
                 // 增加3节
                 snakeArray.push({ ...snakeArray[snakeArray.length - 1] });
                 snakeArray.push({ ...snakeArray[snakeArray.length - 1] });
@@ -686,6 +884,44 @@
             }
             
             return direction;
+        }
+
+        // 触发闪烁效果
+        function triggerBlinkEffect(snakeArray, startIndex, isPlayer2) {
+            if (isBlinking) return; // 如果已经在闪烁中，忽略
+            
+            isBlinking = true;
+            blinkCount = 0;
+            blinkingSegments = {
+                player: isPlayer2 ? 2 : 1,
+                startIndex: startIndex,
+                snakeArray: snakeArray
+            };
+            
+            // 播放音效
+            playHitWallSound();
+            
+            // 闪烁动画（每100ms切换一次，共闪烁1次=2次切换）
+            const blinkInterval = setInterval(() => {
+                blinkCount++;
+                
+                if (blinkCount >= 2) { // 闪烁1次（显示-隐藏）
+                    clearInterval(blinkInterval);
+                    
+                    // 移除撞击部位到尾部的所有部分
+                    snakeArray.splice(startIndex);
+                    if (isPlayer2) {
+                        updateLength2Display();
+                    } else {
+                        updateLengthDisplay();
+                    }
+                    
+                    // 重置闪烁状态
+                    isBlinking = false;
+                    blinkCount = 0;
+                    blinkingSegments = null;
+                }
+            }, 100); // 每100ms切换一次显示/隐藏状态
         }
 
         function updateScore() {
@@ -866,6 +1102,8 @@
                 document.getElementById('modeSelection').style.display = 'block';
                 return;
             }
+            
+            updateGameSpeed(); // 更新速度
             
             snake = [
                 { x: 3, y: 3 },

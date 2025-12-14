@@ -97,6 +97,61 @@
   text-align: center;
 }
 
+.speed-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+  margin-top: 15rpx;
+  padding-top: 15rpx;
+  border-top: 1rpx solid #e0e0e0;
+  width: 100%;
+}
+
+.speed-label {
+  font-size: 24rpx;
+  color: #333;
+  font-weight: bold;
+}
+
+.speed-buttons {
+  display: flex;
+  gap: 12rpx;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.speed-btn {
+  padding: 8rpx 20rpx;
+  font-size: 24rpx;
+  background: #f0f0f0;
+  color: #666;
+  border: 2rpx solid #ddd;
+  border-radius: 8rpx;
+  min-width: 80rpx;
+}
+
+.speed-btn.active {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+  font-weight: bold;
+}
+
+.speed-btn:active {
+  opacity: 0.7;
+}
+
+.speed-btn[disabled] {
+  opacity: 0.4;
+}
+
+.speed-hint {
+  font-size: 20rpx;
+  color: #999;
+  text-align: center;
+}
+
 .button-panel {
   display: flex;
   gap: 15rpx;

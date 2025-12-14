@@ -15,13 +15,22 @@ Page({
     winnerText: '',
     winnerColor: '#4CAF50',
     finalScoreText: '',
-    finalLengthText: ''
+    finalLengthText: '',
+    speedLevel: 3 // 默认速度档位为3（中速）
   },
 
   // 游戏常量
   GRID_SIZE: 20,
   TILE_COUNT: 10, // 从30改为10，格子变大3倍
-  gameSpeed: 400, // 从300改为400，再慢三分之一 (300 * 4/3 = 400)
+  baseSpeed: 400, // 基准速度（档位3）
+  speedLevels: [
+    667, // 档位1：最慢（400 * 1.67）
+    533, // 档位2：较慢（400 * 1.33）
+    400, // 档位3：中速（基准速度）
+    333, // 档位4：较快（400 / 1.2）
+    267  // 档位5：最快（400 / 1.5）
+  ],
+  gameSpeed: 400, // 当前游戏速度
 
   // 游戏状态
   ctx: null,
@@ -38,6 +47,11 @@ Page({
   lastUpdateTime: 0,
   timerInterval: null,
   gameLoopInterval: null,
+  blinkingSegments: null, // 闪烁的蛇身段
+  blinkCount: 0, // 闪烁计数
+  isBlinking: false, // 是否正在闪烁
+  snakeHeadType: 'rect', // 蛇1头部类型: 'rect'=方形, 'circle'=圆形(小果实), 'bigCircle'=大圆形(大果实), 'star'=星形(紫色果实)
+  snakeHeadType2: 'rect', // 蛇2头部类型
 
   onLoad(options) {
     const mode = options.mode || 'single'
@@ -97,6 +111,7 @@ Page({
     ]
     this.direction = { x: 1, y: 0 }
     this.nextDirection = { x: 1, y: 0 }
+    this.snakeHeadType = 'rect' // 重置蛇头类型为方形
 
     // 初始化蛇2
     if (this.data.gameMode === 'double') {
@@ -107,6 +122,7 @@ Page({
       ]
       this.direction2 = { x: -1, y: 0 }
       this.nextDirection2 = { x: -1, y: 0 }
+      this.snakeHeadType2 = 'rect' // 重置蛇2头部类型为方形
     }
 
     // 移除墙壁
@@ -149,7 +165,10 @@ Page({
     } while (
       this.snake.some(segment => segment.x === position.x && segment.y === position.y) ||
       (this.data.gameMode === 'double' && this.snake2.some(segment => segment.x === position.x && segment.y === position.y)) ||
-      this.wall.some(block => block.x === position.x && block.y === position.y) // 避免生成在墙上
+      this.wall.some(block => block.x === position.x && block.y === position.y) || // 避免生成在墙上
+      (this.smallFood && position.x === this.smallFood.x && position.y === this.smallFood.y) || // 避免与小食物重叠
+      (this.bigFood && position.x === this.bigFood.x && position.y === this.bigFood.y) || // 避免与大食物重叠
+      (this.purpleFood && position.x === this.purpleFood.x && position.y === this.purpleFood.y) // 避免与紫色果实重叠
     )
     return position
   },
@@ -163,28 +182,125 @@ Page({
       { x: this.TILE_COUNT - 1, y: this.TILE_COUNT - 1 } // 右下
     ]
     
-    // 随机选择一个角落
-    const randomCorner = corners[Math.floor(Math.random() * corners.length)]
+    // 过滤掉被蛇占据的角落
+    const availableCorners = corners.filter(corner => {
+      const onSnake1 = this.snake.some(segment => segment.x === corner.x && segment.y === corner.y)
+      const onSnake2 = this.data.gameMode === 'double' && this.snake2.some(segment => segment.x === corner.x && segment.y === corner.y)
+      return !onSnake1 && !onSnake2
+    })
+    
+    // 如果没有可用的角落，返回null
+    if (availableCorners.length === 0) {
+      return null
+    }
+    
+    // 随机选择一个可用的角落
+    const randomCorner = availableCorners[Math.floor(Math.random() * availableCorners.length)]
     return randomCorner
   },
 
-  drawRect(x, y, color, borderColor = null) {
+ drawRect(x, y, color, borderColor = null) {
     const size = 700 / this.TILE_COUNT
+    const radius = size * 0.25 // 圆角半径为格子大小的25%
+    
     this.ctx.fillStyle = color
-    this.ctx.fillRect(x * size, y * size, size - 1, size - 1)
+    this.ctx.beginPath()
+    this.ctx.roundRect(x * size, y * size, size - 1, size - 1, radius)
+    this.ctx.fill()
+    
     if (borderColor) {
       this.ctx.strokeStyle = borderColor
-      this.ctx.lineWidth = 1
-      this.ctx.strokeRect(x * size, y * size, size - 1, size - 1)
+      this.ctx.lineWidth = 2
+      this.ctx.stroke()
     }
   },
 
   drawCircle(x, y, color) {
     const size = 700 / this.TILE_COUNT
+    const radius = size * 0.25 // 使用圆角矩形代替圆形
+    
     this.ctx.fillStyle = color
     this.ctx.beginPath()
-    this.ctx.arc(x * size + size / 2, y * size + size / 2, size / 2 - 1, 0, Math.PI * 2)
+    this.ctx.roundRect(x * size, y * size, size - 1, size - 1, radius)
     this.ctx.fill()
+  },
+
+  // 绘制蛇身（支持闪烁效果）
+  drawSnakeSegment(segment, index, snakeArray, isPlayer2 = false, shouldBlink = false) {
+    const size = 700 / this.TILE_COUNT
+    
+    // 如果需要闪烁且当前是闪烁的"隐藏"状态，则不绘制
+    if (shouldBlink && this.blinkCount % 2 === 1) {
+      return
+    }
+    
+    if (index === 0) {
+      // 蛇头 - 根据头部类型绘制不同形状
+      const headColor = isPlayer2 ? '#FF5722' : '#4CAF50'
+      const headBorderColor = isPlayer2 ? '#D84315' : '#2E7D32'
+      const headType = isPlayer2 ? this.snakeHeadType2 : this.snakeHeadType
+      
+      if (headType === 'rect') {
+        // 方形蛇头（初始状态）
+        this.drawRect(segment.x, segment.y, headColor, headBorderColor)
+      } else if (headType === 'circle') {
+        // 圆形蛇头（吃到小果实）
+        this.drawCircle(segment.x, segment.y, headColor)
+      } else if (headType === 'bigCircle') {
+        // 大圆形蛇头（吃到大果实）
+        this.drawCircle(segment.x, segment.y, headColor)
+        // 内部小圆
+        this.ctx.fillStyle = '#FFC107'
+        this.ctx.beginPath()
+        this.ctx.arc(segment.x * size + size / 2, segment.y * size + size / 2, size / 4, 0, Math.PI * 2)
+        this.ctx.fill()
+      } else if (headType === 'star') {
+        // 星形蛇头（吃到紫色果实）
+        this.drawCircle(segment.x, segment.y, '#9C27B0')
+        // 内部小圆
+        this.ctx.fillStyle = '#E1BEE7'
+        this.ctx.beginPath()
+        this.ctx.arc(segment.x * size + size / 2, segment.y * size + size / 2, size / 4, 0, Math.PI * 2)
+        this.ctx.fill()
+      }
+      
+      // 在蛇头上显示节数
+      this.ctx.fillStyle = 'white'
+      this.ctx.font = `bold ${Math.floor(size * 0.6)}px Arial`
+      this.ctx.textAlign = 'center'
+      this.ctx.textBaseline = 'middle'
+      this.ctx.fillText(snakeArray.length, segment.x * size + size / 2, segment.y * size + size / 2)
+    } else {
+      // 蛇身 - 如果即将消失则显示黑色
+      let bodyColor, bodyBorderColor
+      if (shouldBlink) {
+        bodyColor = '#333333'
+        bodyBorderColor = '#000000'
+      } else {
+        // 蛇身纹理效果
+        if (isPlayer2) {
+          bodyColor = '#FF6B35' // 玩家2橙红色基调
+          bodyBorderColor = '#D84315'
+        } else {
+          bodyColor = '#4CAF50' // 玩家1绿色基调
+          bodyBorderColor = '#2E7D32'
+        }
+      }
+      this.drawRect(segment.x, segment.y, bodyColor, bodyBorderColor)
+      
+      // 添加蛇皮纹理效果（斑点）
+      if (!shouldBlink) {
+        const size = 700 / this.TILE_COUNT
+        this.ctx.fillStyle = isPlayer2 ? 'rgba(216, 67, 21, 0.3)' : 'rgba(46, 125, 50, 0.4)'
+        // 绘制两个小斑点
+        this.ctx.beginPath()
+        this.ctx.arc(segment.x * size + size * 0.3, segment.y * size + size * 0.35, size * 0.12, 0, Math.PI * 2)
+        this.ctx.fill()
+        this.ctx.beginPath()
+        this.ctx.arc(segment.x * size + size * 0.7, segment.y * size + size * 0.65, size * 0.1, 0, Math.PI * 2)
+        this.ctx.fill()
+      }
+    }
   },
 
   draw() {
@@ -203,31 +319,19 @@ Page({
 
     // 画蛇1
     this.snake.forEach((segment, index) => {
-      if (index === 0) {
-        this.drawRect(segment.x, segment.y, '#4CAF50', '#2E7D32')
-        this.ctx.fillStyle = 'white'
-        this.ctx.font = `bold ${Math.floor(size * 0.6)}px Arial` // 字体大小适配格子
-        this.ctx.textAlign = 'center'
-        this.ctx.textBaseline = 'middle'
-        this.ctx.fillText(this.snake.length, segment.x * size + size / 2, segment.y * size + size / 2)
-      } else {
-        this.drawRect(segment.x, segment.y, '#8BC34A', '#689F38')
-      }
+      const shouldBlink = this.isBlinking && this.blinkingSegments && 
+                         this.blinkingSegments.player === 1 &&
+                         index >= this.blinkingSegments.startIndex
+      this.drawSnakeSegment(segment, index, this.snake, false, shouldBlink)
     })
 
     // 画蛇2
     if (this.data.gameMode === 'double') {
       this.snake2.forEach((segment, index) => {
-        if (index === 0) {
-          this.drawRect(segment.x, segment.y, '#FF5722', '#D84315')
-          this.ctx.fillStyle = 'white'
-          this.ctx.font = `bold ${Math.floor(size * 0.6)}px Arial` // 字体大小适配格子
-          this.ctx.textAlign = 'center'
-          this.ctx.textBaseline = 'middle'
-          this.ctx.fillText(this.snake2.length, segment.x * size + size / 2, segment.y * size + size / 2)
-        } else {
-          this.drawRect(segment.x, segment.y, '#FF7043', '#E64A19')
-        }
+        const shouldBlink = this.isBlinking && this.blinkingSegments && 
+                           this.blinkingSegments.player === 2 &&
+                           index >= this.blinkingSegments.startIndex
+        this.drawSnakeSegment(segment, index, this.snake2, true, shouldBlink)
       })
     }
 
@@ -300,14 +404,6 @@ Page({
         this.updateLengthDisplay(isPlayer2)
       }
     }
-
-    // 检查自身碰撞（撞到自己尾巴游戏结束）
-    const hitSelf = snakeArray.some(segment => segment.x === head.x && segment.y === head.y)
-    if (hitSelf) {
-      // 游戏结束
-      this.endGameByCollision(isPlayer2 ? 'player2' : 'player1')
-      return direction
-    }
     
     const hitOther = this.data.gameMode === 'double' ? 
       (isPlayer2 ? 
@@ -371,21 +467,34 @@ Page({
 
     snakeArray.unshift(head)
 
+    // 检查自身碰撞（在添加新头部后检查）
+    const hitSelfIndex = snakeArray.findIndex((segment, index) => 
+      index > 1 && segment.x === head.x && segment.y === head.y
+    )
+    if (hitSelfIndex > 1) {
+      // 触发闪烁效果，但不阻止移动
+      this.triggerBlinkEffect(snakeArray, hitSelfIndex, isPlayer2)
+    }
+
     // 检查食物
     if (head.x === this.smallFood.x && head.y === this.smallFood.y) {
       this.playEatSmallSound()
       if (isPlayer2) {
         this.setData({ score2: this.data.score2 + 10 })
+        this.snakeHeadType2 = 'circle' // 蛇头变成圆形
       } else {
         this.setData({ score: this.data.score + 10 })
+        this.snakeHeadType = 'circle' // 蛇头变成圆形
       }
       this.smallFood = this.spawnFood()
     } else if (head.x === this.bigFood.x && head.y === this.bigFood.y) {
       this.playEatBigSound()
       if (isPlayer2) {
         this.setData({ score2: this.data.score2 + 20 })
+        this.snakeHeadType2 = 'bigCircle' // 蛇头变成大圆形
       } else {
         this.setData({ score: this.data.score + 20 })
+        this.snakeHeadType = 'bigCircle' // 蛇头变成大圆形
       }
       snakeArray.push({ ...snakeArray[snakeArray.length - 1] })
       this.bigFood = this.spawnFood()
@@ -395,6 +504,7 @@ Page({
       this.playEatBigSound()
       wx.vibrateShort({ type: 'heavy' })
       this.setData({ score: this.data.score + 30 })
+      this.snakeHeadType = 'star' // 蛇头变成星形
       // 增加3节
       snakeArray.push({ ...snakeArray[snakeArray.length - 1] })
       snakeArray.push({ ...snakeArray[snakeArray.length - 1] })
@@ -417,6 +527,41 @@ Page({
     }
     
     return direction
+  },
+
+  // 触发闪烁效果
+  triggerBlinkEffect(snakeArray, startIndex, isPlayer2) {
+    if (this.isBlinking) return // 如果已经在闪烁中，忽略
+    
+    this.isBlinking = true
+    this.blinkCount = 0
+    this.blinkingSegments = {
+      player: isPlayer2 ? 2 : 1,
+      startIndex: startIndex,
+      snakeArray: snakeArray
+    }
+    
+    // 播放音效和震动
+    this.playHitWallSound()
+    wx.vibrateShort({ type: 'medium' })
+    
+    // 闪烁动画（每100ms切换一次，共闪烁1次=2次切换）
+    const blinkInterval = setInterval(() => {
+      this.blinkCount++
+      
+      if (this.blinkCount >= 2) { // 闪烁1次（显示-隐藏）
+        clearInterval(blinkInterval)
+        
+        // 移除撞击部位到尾部的所有部分
+        snakeArray.splice(startIndex)
+        this.updateLengthDisplay(isPlayer2)
+        
+        // 重置闪烁状态
+        this.isBlinking = false
+        this.blinkCount = 0
+        this.blinkingSegments = null
+      }
+    }, 100) // 每100ms切换一次显示/隐藏状态
   },
 
   updateLengthDisplay(isPlayer2) {
@@ -492,10 +637,33 @@ Page({
       this.lastUpdateTime = Date.now()
       
       // 开始游戏循环
+      this.updateGameSpeed()
       this.gameLoopInterval = setInterval(() => {
         this.update()
       }, this.gameSpeed)
     }
+  },
+
+  // 更新游戏速度
+  updateGameSpeed() {
+    const level = this.data.speedLevel - 1
+    this.gameSpeed = this.speedLevels[level]
+  },
+
+  // 切换速度档位
+  changeSpeed(e) {
+    if (this.data.gameRunning) {
+      wx.showToast({
+        title: '游戏进行中无法调速',
+        icon: 'none'
+      })
+      return
+    }
+    
+    const level = parseInt(e.currentTarget.dataset.level)
+    this.setData({ speedLevel: level })
+    this.updateGameSpeed()
+    wx.vibrateShort({ type: 'light' })
   },
 
   togglePause() {
@@ -514,6 +682,7 @@ Page({
       gamePaused: false,
       showGameOver: false
     })
+    this.updateGameSpeed() // 更新速度
     this.initGame()
   },
 

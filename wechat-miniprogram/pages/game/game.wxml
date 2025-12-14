@@ -28,6 +28,49 @@
   <view class="controls">
     <text class="control-text">{{controlText}}</text>
     <text class="control-hint">🟢 小虫子: +1节 | 🔴 大虫子: +2节 | 🟣 紫色果实: +3节</text>
+    
+    <!-- 速度调节控制 -->
+    <view class="speed-control">
+      <text class="speed-label">游戏速度:</text>
+      <view class="speed-buttons">
+        <button 
+          class="speed-btn {{speedLevel === 1 ? 'active' : ''}}" 
+          data-level="1" 
+          bindtap="changeSpeed"
+          disabled="{{gameRunning}}">
+          1档
+        </button>
+        <button 
+          class="speed-btn {{speedLevel === 2 ? 'active' : ''}}" 
+          data-level="2" 
+          bindtap="changeSpeed"
+          disabled="{{gameRunning}}">
+          2档
+        </button>
+        <button 
+          class="speed-btn {{speedLevel === 3 ? 'active' : ''}}" 
+          data-level="3" 
+          bindtap="changeSpeed"
+          disabled="{{gameRunning}}">
+          3档
+        </button>
+        <button 
+          class="speed-btn {{speedLevel === 4 ? 'active' : ''}}" 
+          data-level="4" 
+          bindtap="changeSpeed"
+          disabled="{{gameRunning}}">
+          4档
+        </button>
+        <button 
+          class="speed-btn {{speedLevel === 5 ? 'active' : ''}}" 
+          data-level="5" 
+          bindtap="changeSpeed"
+          disabled="{{gameRunning}}">
+          5档
+        </button>
+      </view>
+      <text class="speed-hint">1档最慢，5档最快（游戏前设置）</text>
+    </view>
   </view>
 
   <view class="button-panel">
